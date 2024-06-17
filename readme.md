@@ -1,20 +1,44 @@
-# `MLTマルチメディアフレームワーク`と`Python`
+# `MLTマルチメディアフレームワーク`と`melt`と`Python`バインディング
 ## はじめに
-ノンリニア動画編集ソフトである`Shotcut`, `kdenlive`や`OpenShot`では背後に`MLTマルチメディアフレームワーク`が使われています。
-後述しますが、動画編集の定義は`MLT XML`によって**文字列として**定義されます。
-これはすなわち、**`Python`などで編集したり実行させたりが可能**だということを意味します。
+先日`kdenlive`の[映像エフェクトレンダリングデモ一覧の記事](https://zenn.dev/ykesamaru/articles/35de0c41db36d1)を書いたわけですが、あれらのエフェクトは`kdenlive`などのノンリニア動画編集ソフトを使用しないと実現できないものなのでしょうか？つまりコマンドラインから編集はできないのでしょうか？
 
-この記事では`MLTマルチメディアフレームワーク`についての簡単な紹介と、その仕組みを通じてエフェクトの自動化を試みます。
+はい、映像編集もコマンドラインから可能です。
+
+例えば画像編集ソフトである`GIMP`は高機能ですが、簡単な編集であれば`ImageMagick`で代用できますよね。
+同じように、`kdenlive`や`Shotcut`のような高機能な映像編集ソフトを使わなくても、簡単なエフェクト処理であれば`Melt`というコマンドで行うことができます。
+
+| GUI | CLI  |
+|---|---|
+| GIMP | ImageMagick |
+| kdenlive | Melt |
+
+また`ImageMagick`や`Melt`は必ずしもワンライナーで書かなくてはいけないという制限はありません。
+好きなだけ複雑なスクリプトを書けるわけですが、先程例えに出した`ImageMagick`と`Melt`では、そのスクリプトに違いがあります。
+
+どういうことでしょうか？
+
+`ImageMagick`の場合、`convert`や`mogrify`などをシェルスクリプトの形にすれば複雑な編集が可能です。
+`Melt`の場合も同様、シェルスクリプトに書くことができます。
+しかし`Melt`の場合は`MLT XML`という、`XML`で記述するところに真骨頂があります。
+そしてそのXMLファイル作成用のPythonバインディングが存在します。
+
+応用範囲がものすごく広がりそうだと思いませんか？
+
+今回の記事では、`Melt`の紹介はもとより、その背後の`MLTマルチメディアフレームワーク`の仕組みにも触れて、コマンドラインからの映像編集がどのようなものか、さらにPythonバインディングまで紹介したいと思います。
+
+![元画像](assets/example.png)
+元画像
 
 ## MLTマルチメディアフレームワークとはなにか？
-MLTフレームワークは、動画編集およびメディア処理のためのオープンソースフレームワークです。
+ノンリニア動画編集ソフトである`Shotcut`, `kdenlive`や`OpenShot`では背後に`MLTマルチメディアフレームワーク`が使われています。
+`MLTマルチメディアフレームワーク`は、動画編集およびメディア処理のためのオープンソースフレームワークです。
 メディアファイルの処理、エフェクトの適用、トランジションの追加、オーディオ処理などを定義出来ます。
-動画編集ソフトウェアのバックエンドとして使用されていて、`Kdenlive`や`Shotcut`は、MLTフレームワークを使用する代表的な動画編集ソフトウェアです[^1]。
-[^1]: `Shotcut`は`MLT`と開発者が同じ人。
+動画編集ソフトウェアのバックエンドとして使用されていて、`Kdenlive`や`Shotcut`は、`MLTマルチメディアフレームワーク`を使用する代表的な動画編集ソフトウェアです[^1]。
+[^1]: `Shotcut`は`MLT`と開発者が同じ人(Dan Dennedy)。
 
 *MLTエンジン、MLTサービス、MLTプロデューサー、MLTコンシューマーなどのコンポーネント*から構成されます。
 
-以下に、MLTフレームワークのコンポーネントと構造要素の概念をそれぞれ示します。
+以下に、`MLTマルチメディアフレームワーク`のコンポーネントと構造要素の概念をそれぞれ示します。
 
 ### コンポーネント
 
@@ -31,9 +55,9 @@ MLTフレームワークは、動画編集およびメディア処理のため�
 |----------------------|-----------------------------------------------------------------------------------------------------------|
 | プロファイル      | プロジェクトの全体設定（解像度、フレームレート、カラースペースなど）を定義します。                                                            |
 | プレイリスト      | 複数のメディアクリップを管理し、タイムライン上での再生順序を決定します。                                                                    |
-| トラクター        | タイムライン管理を行い、複数のトラックやトランジションを含むコンポーネントです。                                                              |
-| フィルター        | メディアデータに対してエフェクトやフィルタを適用するコンポーネントです。                                                                     |
-| トランジション    | 異なるメディアクリップ間の切り替えをスムーズに行うためのコンポーネントです。                                                                 |
+| トラクター        | タイムライン管理を行い、複数のトラックやトランジションを含むコンポーネント                                                              |
+| フィルター        | メディアデータに対してエフェクトやフィルタを適用するコンポーネント                                                                     |
+| トランジション    | 異なるメディアクリップ間の切り替えをスムーズに行うためのコンポーネント                                                                 |
 
 ### どのように記述されるか
 `MLT XML`として記述します。
@@ -69,175 +93,223 @@ MLTフレームワークは、動画編集およびメディア処理のため�
 ```
 
 
-### MLTフレームワークの使用例
+## `MLTマルチメディアフレームワーク`の使用例
 
-MLTフレームワークを使用して、Pythonから動画編集を行う例を以下に示します。
+`MLTマルチメディアフレームワーク`を使用して、動画編集を行いましょう。
 
-#### インストール
-##### MLTのインストール
-MLT自体(`libmlt7`など)は`Ubuntu 22.04 LTS`の`universe`リポジトリにも存在します。
-これらはMLTのPythonバインディングである`python3-mlt`をインストールすると自動的にインストールされます。
-
-`Gnome Boxes`にインストールした`Ubuntu 24.04 LTS`に`python3-mlt`をインストールします。
-`python3-mlt`自体も`universe`セクションにあります。
+### `Melt`のインストール
+コマンドラインから動画編集を可能にする`Melt`をインストールします。
 ```bash
-# Gnome BoxesのUbuntu 24.04にインストール
-sudo add-apt-repository universe
-sudo apt update && apt upgrade -y
-sudo apt install python3-mlt
+sudo apt install -y melt
+```
+```bash
+以下のパッケージが新たにインストールされます:
+  libebur128-1 liblept5 libmlt++7 libmlt-data libmlt7 libmovit8 libopencv-calib3d4.5d libopencv-contrib4.5d libopencv-dnn4.5d
+  libopencv-features2d4.5d libopencv-flann4.5d libopencv-highgui4.5d libopencv-ml4.5d libopencv-objdetect4.5d libopencv-video4.5d librtaudio6
+  libtesseract4 melt
+```
+`libmlt7`などが`MLT`関連のライブラリです。
+
+それでは動作確認をしましょう。
+```bash
+melt sample.mp4 -filter frei0r.emboss -consumer avformat:output_video.gif r=10
+```
+- `-filter frei0r.emboss`
+  - 入力ファイルに対してエフェクト処理をする
+- `-consumer avformat`
+  - `FFmpeg`の`avformat`ライブラリを使用して、出力ファイルを作成
+- `r`
+  - フレームレートを指定。`r=10`は10fps。
+![](assets/output_video.gif)
+
+動作確認終了です。
+
+#### `Melt`で使用可能なフィルタサービス（エフェクト）
+`Melt`で使用できるエフェクトは以下のようにして取得可能です。
+```bash
+melt -query "filters"
+---
+filters:
+  - avcolour_space
+  - avcolor_space
+  - avdeinterlace
+  - swscale
+  - avfilter.abench
+  - avfilter.acompressor
+  - avfilter.acontrast
+  - avfilter.acue
+（後略）
+```
+このフィルタにはオーディオフィルタも含まれますが、**450種類**(！)くらいのフィルタが出力されます。
+もし個々のフィルタの設定を知りたい場合は`-query`引数を用います。
+```bash
+# melt -query "filter=<フィルタ名>
+melt -query "filter=frei0r.emboss"
+---
+schema_version: 0.3
+title: emboss
+version: 0.1
+identifier: frei0r.emboss
+description: Creates embossed relief image of source image
+creator: Janne Liljeblad
+type: filter
+tags:
+  - Video
+parameters:
+  - identifier: 0
+    title: azimuth
+    description: Light direction
+    type: float
+    minimum: 0
+    maximum: 1
+    default: 0.375
+    mutable: yes
+    widget: spinner
+  - identifier: 1
+    title: elevation
+    description: Background lightness
+    type: float
+    minimum: 0
+    maximum: 1
+    default: 0.333333
+    mutable: yes
+    widget: spinner
+  - identifier: 2
+    title: width45
+    description: Bump height
+    type: float
+    minimum: 0
+    maximum: 1
+    default: 0.25
+    mutable: yes
+    widget: spinner
+...
+```
+これをみるとデフォルト値がいくつなのか、設定値の範囲はどれくらいかを確認できます。
+この出力結果をみると、変更可能なパラメータは`azimuth, elevation, width45`だとわかります。`azimuth`は光の方向、`elevation`は背景の明るさ、`width45`はバンプの高さを表します。そしてこれらには個別の`identifier`が割り振られています。例えば`azimuth`なら`identifier`は`0`です。そして各設定値は`:`でつなげて指定します。
+たとえば先程の`emboss`フィルタではデフォルト値が使われたのでした。この値を以下のように変化させるとどうなるでしょうか。
+```bash
+melt sample.mp4 -filter frei0r.emboss:0=0.0:1=0.9:2=0.0 -consumer avformat:output_3.gif r=5
 ```
 
+入力が静止画の場合、`in`と`out`を指定します。`out`がフレーム数となります。
 ```bash
-$ sudo apt install python3-mlt
-パッケージリストを読み込んでいます... 完了
-依存関係ツリーを作成しています... 完了        
-状態情報を読み取っています... 完了        
-以下の追加パッケージがインストールされます:
-  gdal-data gdal-plugins i965-va-driver intel-media-va-driver libaacs0 libaec0 libarmadillo12 libarpack2t64 libass9 libavcodec60 libavdevice60 libavfilter9 libavformat60 libavutil58 libbdplus0 libblas3 libblosc1 libbluray2
-（中略）
-libpostproc57 libpq5
-  libproj25 libqhull-r8.0 libqt5opengl5t64 libqt5test5t64 librabbitmq4 librav1e0 librist4 librtaudio6 librttopo1 librubberband2 libsdl1.2debian libsdl2-2.0-0 libserd-0-0 libshine3 libsnappy1v5 libsndio7.0 libsocket++1
-  libsodium23 libsord-0-0 libsox-fmt-alsa libsox-fmt-base libsox3 libsoxr0 libspatialite8t64 libsphinxbase3t64 libsratom-0-0 libsrt1.5-gnutls libssh-gcrypt-4 libsuperlu6 libsvtav1enc1d1 libswresample4 libswscale7 libsz2 libtbb12
-  libtbbbind-2-5 libtbbmalloc2 libtesseract5 libudfread0 libunibreak5 liburiparser1 libva-drm2 libva-x11-2 libva2 libvdpau1 libvidstab1.1 libvpl2 libx264-164 libx265-199 libxerces-c3.2t64 libxnvctrl0 libxvidcore4 libzimg2
-  libzix-0-0 libzmq5 libzvbi-common libzvbi0t64 mesa-va-drivers mesa-vdpau-drivers mysql-common ocl-icd-libopencl1 pocketsphinx-en-us proj-bin proj-data python3-mlt unixodbc-common va-driver-all vdpau-driver-all
+melt example.png in=0 out=10 -filter oldfilm -consumer avformat:output_oldfilm.gif
 ```
-非常に多くの依存ライブラリがインストールされます。
+![](assets/output_oldfilm.gif)
 
+***※ 書式に間違いはないように思えますが、わたしの環境では`-filter`の引数が反映されませんでした。これは`emboss`だけでなく、`oldfilm`においても同様でした。後述のMLT XML使用時は機能しました***
+
+```bash
+melt example.png in=0 out=10 -filter oldfilm:delta=400:brightnessdelta_up=100:brightnessdelta_down=100 -consumer avformat:oldfilm02.gif
+```
+![](assets/oldfilm02.gif)
+
+詳細は`man melt`にて確認できます。また付加情報は[Melt Documentation](https://www.mltframework.org/docs/melt/)にあります。試してはいませんがドキュメンテーションによると2トラック以上のエフェクトの追加など複雑なことが可能なようです。
+ただし、ドキュメンテーションにあるように
+- コマンドライン解析時のエラーチェックが弱いこと
+- 複雑な処理には複雑なコマンドラインを構築しなければならないこと（非現実的）
+
+とあります。
+
+では、複雑なコマンドライン構築を避けて、なおかつ思い通りの映像エフェクトを実現できないものでしょうか？
+
+それを解決するのが次に説明する`MLT XML`の仕組み(`MLT Multimedia Framework`)とそのバインディングである`python3-mlt`です。
+
+
+#### MLTのインストール(`python3-mlt`)
+というわけで、`MLT Multimedia Framework`を利用するためにパイソンバインディングをインストールしていきましょう。
+※  `melt`をインストールしていない場合、MLTのPythonバインディングである`python3-mlt`をインストールすると必要なライブラリ群(`libmlt7`など)が一緒にインストールされます。
 - `libmlt7`: MLTライブラリの主要な部分
 - `libmlt++7`: MLTライブラリのC++バインディング
 - `libmlt-data`: MLTライブラリに関連するデータ
 - その他、多数の依存パッケージ（例：`libavcodec60`、`libavformat60`、`libavutil58`など）、FFmpegなどに必要なライブラリ
 
+リポジトリは`Ubuntu 22.04 LTS`の`universe`リポジトリになります。
+
+はじめ、普段使用しているシステムに`venv`による仮想環境を作り、そこで`MLT`を試そうとしましたが、システムにライブラリをインストールしないといけないことがわかりました。
+
+そこでここでは`Gnome Boxes`にインストールした`Ubuntu 22.04 LTS`に`python3-mlt`をインストールします。
+`python3-mlt`自体も`universe`セクションにあります。
+```bash
+# Gnome BoxesのUbuntu 22.04にインストール
+sudo add-apt-repository universe
+sudo apt update && apt upgrade -y
+sudo apt install python3-mlt
+```
+
 インストールが完了したら、以下のPythonスクリプトを実行して、MLTが正しくインストールされているか確認します。
 
 ```bash
-$ python3
-Python 3.12.3 (main, Apr 10 2024, 05:33:47) [GCC 13.2.0] on linux
+$ python3Python 3.10.12 (main, Nov 20 2023, 15:14:05) [GCC 11.4.0] on linux
 Type "help", "copyright", "credits" or "license" for more information.
->>> import mlt
-
-```
-しかし残念ながらこの時点でエラーが発生してしまいました。
-
-以下は問題解決のために試行した手順です。（ここは読み飛ばしてもらって構いません）
-```bash
-boxes@boxes:~$ dpkg -l ~ grep mlt
-dpkg-query: /home/terms-boxes に一致するパッケージが見つかりません
-dpkg-query: mlt に一致するパッケージが見つかりません
-要望=(U)不明/(I)インストール/(R)削除/(P)完全削除/(H)保持
-| 状態=(N)無/(I)インストール済/(C)設定/(U)展開/(F)設定失敗/(H)半インストール/(W)トリガ待ち/(T)トリガ保留
-|/ エラー?=(空欄)無/(R)要再インストール (状態,エラーの大文字=異常)
-||/ 名前           バージョン   アーキテクチ 説明
-+++-==============-============-============-=================================
-ii  grep           3.11-4build1 amd64        GNU grep, egrep and fgrep
-boxes@boxes:~$ dpkg -l | grep mlt
-ii  libmlt++7:amd64                               7.22.0-1build6                           amd64        MLT multimedia framework C++ wrapper (runtime)
-ii  libmlt-data                                   7.22.0-1build6                           all          multimedia framework (data)
-ii  libmlt7:amd64                                 7.22.0-1build6                           amd64        multimedia framework (runtime)
-ii  python3-mlt                                   7.22.0-1build6                           amd64        multimedia framework (Python bindings)
-boxes@boxes:~$ echo $PYTHONPATH
-
-boxes@boxes:~$ python3 --version
-Python 3.12.3
-boxes@boxes:~$ export PYTHONPATH=$PYTHONPATH:/usr/lib/python3/dist-packages
-boxes@boxes:~$ echo $PYTHONPATH
-:/usr/lib/python3/dist-packages
-boxes@boxes:~$ python3
-Python 3.12.3 (main, Apr 10 2024, 05:33:47) [GCC 13.2.0] on linux
-Type "help", "copyright", "credits" or "license" for more information.
->>> import mlt
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-ModuleNotFoundError: No module named 'mlt'
+>>> import mlt7
+>>> mlt_version = mlt7.Factory().init()
+No LADSPA plugins were found!
+Check your LADSPA_PATH environment variable.
+>>> print("MLT Version:", mlt_version)
+MLT Version: <mlt7.Repository; proxy of <Swig Object of type 'Mlt::Repository *' at 0x7b9040195890> >
 >>> 
 ```
-この出力をみる限り、`Python3.12`と`MLT`のバインディングができていないのではないかと勘ぐりました。
-そこで、`pyenv`を導入し、`Python3.10`の環境を作成します。
-こちらも本題とは関係ないので読み飛ばしてください。
+このように表示されればインストールは完了です。
 
-```bash
-terms-boxes@boxes-standard-pc-i440fx-piix-1996:~$ sudo apt install -y curl make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev git
-
-
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#### 例: PythonでMLTを使用して動画にエフェクトを追加
-
+### PythonでMLTを使用して動画にエフェクトを追加
 まず、`lxml`ライブラリを使用してMLT XMLを生成し、それを使って動画にエフェクトを適用します。
+前もって`pip`でインストールをしておきましょう。
+```bash
+# pipなどのアップグレード
+pip install -U pip wheel setuptools
+pip install lxml
+```
+それではPythonをつかって`MLT XMLファイル`を作成します。
+
+下記のPythonスクリプトは下記のコマンドラインと同様の動作を定義する`MLT XMLファイル`を作成するものです。
+```bash
+melt example.png in=0 out=10 -filter oldfilm:delta=400:brightnessdelta_up=100:brightnessdelta_down=100 -consumer avformat:oldfilm02.gif
+```
 
 ```python
 from lxml import etree
 
-def create_mlt_xml_with_effect(input_video, output_xml):
+
+def create_mlt_xml_with_oldfilm(input_image, output_xml):
     # MLT XMLのルート要素を作成
-    mlt = etree.Element('mlt', version="6.26.1")
+    mlt = etree.Element('mlt', version="7.4.0")
 
     # プロファイルを追加
     profile = etree.SubElement(mlt, 'profile', {
-        'description': 'HD 1080p 25 fps',
-        'width': '1920',
-        'height': '1080',
-        'progressive': '1',
-        'frame_rate_num': '25',
-        'frame_rate_den': '1',
-        'colorspace': '709'
+        'description': 'NTSC 720x480 10fps',  # プロファイルの説明
+        'width': '720',  # 横幅720px
+        'height': '480',  # 縦幅480px
+        'progressive': '1',  # プログレッシブスキャン
+        'frame_rate_num': '10',  # フレームレートの分子
+        'frame_rate_den': '1',  # フレームレートの分母
+        'colorspace': '601'  # カラースペース（オプション）
     })
 
     # プロデューサーを追加
     producer = etree.SubElement(mlt, 'producer', id="producer0")
     property_element = etree.SubElement(producer, 'property', name="resource")
-    property_element.text = input_video
+    property_element.text = input_image
     property_element = etree.SubElement(producer, 'property', name="mlt_service")
-    property_element.text = 'avformat'
+    property_element.text = 'qimage'
 
     # プレイリストを追加
     playlist = etree.SubElement(mlt, 'playlist', id="playlist0")
-    entry = etree.SubElement(playlist, 'entry', producer="producer0")
+    entry = etree.SubElement(playlist, 'entry', producer="producer0", **{"in": "0", "out": "10"})
 
-    # フェードインエフェクトを追加
-    filter_element = etree.SubElement(mlt, 'filter', id="filter0", {
-        'mlt_service': 'frei0r.alphaatop',
-        'in': '0',
-        'out': '50'
-    })
-    param = etree.SubElement(filter_element, 'property', name="0")
-    param.text = '0.0=0;1.0=1'
+    # oldfilmエフェクトを追加
+    filter_element = etree.SubElement(playlist, 'filter', id="filter0")
+    filter_element.set('mlt_service', 'oldfilm')
+    filter_element.set('in', '0')
+    filter_element.set('out', '10')
+    
+    param_delta = etree.SubElement(filter_element, 'property', name="delta")
+    param_delta.text = '400'
+    param_brightness_up = etree.SubElement(filter_element, 'property', name="brightnessdelta_up")
+    param_brightness_up.text = '100'
+    param_brightness_down = etree.SubElement(filter_element, 'property', name="brightnessdelta_down")
+    param_brightness_down.text = '100'
 
     # タイムラインを追加
     tractor = etree.SubElement(mlt, 'tractor', id="tractor0")
@@ -245,20 +317,72 @@ def create_mlt_xml_with_effect(input_video, output_xml):
     transition = etree.SubElement(tractor, 'transition', {
         'mlt_service': 'mix',
         'in': '0',
-        'out': '250'
+        'out': '10'
     })
 
     # XMLツリーをファイルに保存
     tree = etree.ElementTree(mlt)
     tree.write(output_xml, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
-# 使用例
-create_mlt_xml_with_effect("input_video.mp4", "output_with_effect.mlt")
+if __name__ == "__main__":
+    # 使用例
+    create_mlt_xml_with_oldfilm("assets/example.png", "output_with_oldfilm.mlt")
 ```
+
+このスクリプトを実行した結果が以下になります。
+```xml
+<?xml version='1.0' encoding='UTF-8'?>
+<mlt version="7.4.0">
+  <profile description="NTSC 720x480 10fps" width="720" height="480" progressive="1" frame_rate_num="10" frame_rate_den="1" colorspace="601"/>
+  <producer id="producer0">
+    <property name="resource">assets/example.png</property>
+    <property name="mlt_service">qimage</property>
+  </producer>
+  <playlist id="playlist0">
+    <entry producer="producer0" in="0" out="10"/>
+    <filter id="filter0" mlt_service="oldfilm" in="0" out="10">
+      <property name="delta">400</property>
+      <property name="brightnessdelta_up">100</property>
+      <property name="brightnessdelta_down">100</property>
+    </filter>
+  </playlist>
+  <tractor id="tractor0">
+    <track producer="playlist0"/>
+    <transition mlt_service="mix" in="0" out="10"/>
+  </tractor>
+</mlt>
+```
+
+このファイルが`MLT XMLファイル`です。このファイルがレシピとなります。
+ではこのレシピをもとにファイルの変換を行いましょう。
+```bash
+melt output_with_oldfilm.mlt -consumer avformat:output_oldfilm.gif
+```
+
+出来上がったファイルが以下になります。`mlt`コマンドでは引数が動作しないバグ？がありましたが、こちらはきちんと設定値が反映されているようです。
+![](assets/output_oldfilm_from_xml.gif)
+
+
+## 最後に
+今回は例を示しただけですので、もしかしたら「せっかく`MLT XMLファイル`を作成しても`melt`コマンドとできることが同じなら`melt`コマンドだけで良くない？」と思われる方もいらっしゃると思います。
+ではなぜ`MLT XML`の仕組みがあるのかと言えば、もっとずっと複雑な指示が記載できるからです。たとえば`kdenlive`や`Shotcut`などでは内部で`MLT XML`を利用しています。複数トラックのコンポジションやトランジション、映像だけでなくオーディオのエフェクト、どのようなファイル形式で書き出すかなど、ありとあらゆることができるようになります。
+逆に今回の例のように簡単なものであれば`melt`コマンド単体のほうが簡単です。
+あるいはPythonスクリプトで`MLT XML`ファイルを作成できるようにしておくことで、再利用性が上がりますし、複数のファイルを一度に処理できたり、条件分岐したりと汎用性をもたせることもできます。利用範囲次第、ということですね。
+
+以上です。ありがとうございました。
+
+## 参考文献
+- [Media Lovin' Toolkit: Wikipedia](https://en.wikipedia.org/wiki/Media_Lovin%27_Toolkit)
+- [MLT Documentation](https://www.mltframework.org/docs/)
+  - [Melt](https://www.mltframework.org/docs/melt/)
+  - [MLT Multimedia Framework](https://www.mltframework.org/)
+- [MLT Framework(GitHub)](https://github.com/mltframework)
+
 
 ---
 
 ## 補足
+本文に入れるには冗長な情報を以下に記述します。
 ### MLTマルチメディアフレームワークの歴史
 > 1. **2002年 - プロジェクト開始**
 >    - MLT (Media Lovin' Toolkit) プロジェクトは、Dan Dennedyによって開始されました。彼は当時、放送業界での使用を目的としたメディア編集フレームワークを開発していました。
@@ -310,9 +434,3 @@ create_mlt_xml_with_effect("input_video.mp4", "output_with_effect.mlt")
 | レンダリング       | 最終的な編集結果をファイルとして出力するためのレンダリング機能を提供。                                              |
 
 
-
-## 参考文献
-- [MLT Multimedia Framework](https://www.mltframework.org/)
-  ![](assets/2024-06-16-14-01-25.png)
-- [MLT Framework(GitHub)](https://github.com/mltframework)
-  ![](assets/2024-06-16-14-15-32.png)
