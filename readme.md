@@ -26,7 +26,7 @@
 
 今回の記事では、`Melt`の紹介はもとより、その背後の`MLTマルチメディアフレームワーク`の仕組みにも触れて、コマンドラインからの映像編集がどのようなものか、さらにPythonバインディングまで紹介したいと思います。
 
-![元画像](assets/example.png)
+![元画像](https://raw.githubusercontent.com/yKesamaru/MLT_and_python/master/assets/example.png)
 元画像
 
 ## MLTマルチメディアフレームワークとはなにか？
@@ -120,7 +120,7 @@ melt sample.mp4 -filter frei0r.emboss -consumer avformat:output_video.gif r=10
   - `FFmpeg`の`avformat`ライブラリを使用して、出力ファイルを作成
 - `r`
   - フレームレートを指定。`r=10`は10fps。
-![](assets/output_video.gif)
+![](https://raw.githubusercontent.com/yKesamaru/MLT_and_python/master/assets/output_video.gif)
 
 動作確認終了です。
 
@@ -196,14 +196,14 @@ melt sample.mp4 -filter frei0r.emboss:0=0.0:1=0.9:2=0.0 -consumer avformat:outpu
 ```bash
 melt example.png in=0 out=10 -filter oldfilm -consumer avformat:output_oldfilm.gif
 ```
-![](assets/output_oldfilm.gif)
+![](https://raw.githubusercontent.com/yKesamaru/MLT_and_python/master/assets/output_oldfilm.gif)
 
 ***※ 書式に間違いはないように思えますが、わたしの環境では`-filter`の引数が反映されませんでした。これは`emboss`だけでなく、`oldfilm`においても同様でした。後述のMLT XML使用時は機能しました***
 
 ```bash
 melt example.png in=0 out=10 -filter oldfilm:delta=400:brightnessdelta_up=100:brightnessdelta_down=100 -consumer avformat:oldfilm02.gif
 ```
-![](assets/oldfilm02.gif)
+![](https://raw.githubusercontent.com/yKesamaru/MLT_and_python/master/assets/oldfilm02.gif)
 
 詳細は`man melt`にて確認できます。また付加情報は[Melt Documentation](https://www.mltframework.org/docs/melt/)にあります。試してはいませんがドキュメンテーションによると2トラック以上のエフェクトの追加など複雑なことが可能なようです。
 ただし、ドキュメンテーションにあるように
@@ -360,7 +360,7 @@ melt output_with_oldfilm.mlt -consumer avformat:output_oldfilm.gif
 ```
 
 出来上がったファイルが以下になります。`mlt`コマンドでは引数が動作しないバグ？がありましたが、こちらはきちんと設定値が反映されているようです。
-![](assets/output_oldfilm_from_xml.gif)
+![](https://raw.githubusercontent.com/yKesamaru/MLT_and_python/master/assets/output_oldfilm_from_xml.gif)
 
 
 ## 最後に
